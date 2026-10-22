@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ЕДС Заявки — Аналитический дашборд</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/fontsource/css/inter@latest/index.css" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        body { background: #0f172a; }
+        .card {
+            background: linear-gradient(135deg, #1e293b 0%, #1a2332 100%);
+            border: 1px solid rgba(99, 102, 241, 0.15);
+            border-radius: 16px;
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            border-color: rgba(99, 102, 241, 0.35);
+            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.1);
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #1e293b 0%, #1a2332 100%);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+        .stat-card-repeat {
+            background: linear-gradient(135deg, #3b1f3a 0%, #2a1a33 100%);
+            border: 1px solid rgba(236, 72, 153, 0.3);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+        .glow-blue { text-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
+        .glow-red { text-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+        .glow-green { text-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
+        .glow-amber { text-shadow: 0 0 20px rgba(245, 158, 11, 0.5); }
+        .glow-pink { text-shadow: 0 0 20px rgba(236, 72, 153, 0.5); }
+        .list-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.08);
+            transition: background 0.2s;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        .list-item:hover { background: rgba(99, 102, 241, 0.05); }
+        .list-item:last-child { border-bottom: none; }
+        .progress-bar {
+            height: 4px;
+            border-radius: 2px;
+            background: #1e293b;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 1s ease;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-in { animation: fadeInUp 0.6s ease forwards; }
+        .delay-1 { animation-delay: 0.1s; opacity: 0; }
+        .delay-2 { animation-delay: 0.2s; opacity: 0; }
+        .delay-3 { animation-delay: 0.3s; opacity: 0; }
+        .delay-4 { animation-delay: 0.4s; opacity: 0; }
+
+        .upload-zone {
+            border: 2px dashed rgba(99, 102, 241, 0.4);
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(26, 35, 50, 0.6) 100%);
+            border-radius: 16px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: rgba(99, 102, 241, 0.9);
+            background: linear-gradient(135deg, rgba(49, 46, 129, 0.3) 0%, rgba(26, 35, 50, 0.6) 100%);
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.2);
+        }
+        .upload-zone.dragover { transform: scale(1.01); }
+
+        .wrap-text {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
+            word-break: break-word;
+            hyphens: auto;
+        }
+
+        .repeat-accordion {
+            border: 1px solid rgba(236, 72, 153, 0.15);
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.4);
+            margin-bottom: 6px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+        .repeat-accordion[open] {
+            border-color: rgba(236, 72, 153, 0.35);
+            background: rgba(236, 72, 153, 0.03);
+        }
+        .repeat-accordion summary {
+            padding: 10px 14px;
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            user-select: none;
+        }
+        .repeat-accordion summary::-webkit-details-marker { display: none; }
+        .repeat-accordion summary::before {
+            content: '▸';
+            color: #ec4899;
+            font-size: 12px;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+        .repeat-accordion[open] summary::before { transform: rotate(90deg); }
+        .repeat-accordion .accordion-body {
+            padding: 4px 14px 10px 32px;
+            border-top: 1px solid rgba(236, 72, 153, 0.1);
+        }
+        .fact-row {
+            padding: 5px 0;
+            border-bottom: 1px dashed rgba(236, 72, 153, 0.08);
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .fact-row:last-child { border-bottom: none; }
+
+        .topic-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        @media print {
+            @page {
+                size: A3 landscape;
+                margin: 6mm;
+            }
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+            html, body {
+                background: #0f172a !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            body {
+                padding: 0 !important;
+                font-size: 7.5px;
+                line-height: 1.25;
+            }
+            .no-print { display: none !important; }
+            .card, .stat-card, .stat-card-repeat {
+                background: linear-gradient(135deg, #1e293b 0%, #1a2332 100%) !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                break-inside: avoid;
+                page-break-inside: avoid;
+                border: 1px solid rgba(99, 102, 241, 0.3) !important;
+                padding: 6px !important;
+                border-radius: 8px !important;
+            }
+            .stat-card-repeat {
+                background: linear-gradient(135deg, #3b1f3a 0%, #2a1a33 100%) !important;
+                border: 1px solid rgba(236, 72, 153, 0.4) !important;
+            }
+            canvas {
+                max-height: none !important;
+                height: auto !important;
+                page-break-inside: avoid;
+            }
+            .chart-container { height: auto !important; min-height: 140px !important; }
+            .chart-container-lg { height: auto !important; min-height: 200px !important; }
+            .no-scroll { max-height: none !important; overflow: visible !important; height: auto !important; }
+            .topic-block {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                break-inside: avoid;
+            }
+            .progress-fill, .progress-bar {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            [class*="bg-red-"], [class*="bg-orange-"], [class*="bg-amber-"],
+            [class*="bg-blue-"], [class*="bg-purple-"], [class*="bg-indigo-"],
+            [class*="bg-emerald-"], [class*="bg-gray-"], [class*="bg-pink-"] {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .wrap-text, .list-item, h3, h4, p, span, td, th {
+                word-wrap: break-word !important;
+                overflow-wrap: break-word !important;
+                white-space: normal !important;
+            }
+            details.repeat-accordion > .accordion-body { display: block !important; }
+            details.repeat-accordion summary::before { content: '▾' !important; }
+            h1, h2, h3, h4 { color: #fff !important; }
+            .text-gray-400 { color: #94a3b8 !important; }
+            .text-gray-500 { color: #64748b !important; }
+            .print-grid-4 { grid-template-columns: repeat(4, 1fr) !important; }
+            .print-grid-3 { grid-template-columns: repeat(3, 1fr) !important; }
+            .print-grid-2 { grid-template-columns: repeat(2, 1fr) !important; }
+            .print-grid-7 { grid-template-columns: repeat(7, 1fr) !important; }
+            .mb-8 { margin-bottom: 4px !important; }
+            .mb-6 { margin-bottom: 4px !important; }
+            .mb-4 { margin-bottom: 3px !important; }
+            .mb-3 { margin-bottom: 2px !important; }
+            .mb-2 { margin-bottom: 2px !important; }
+            .gap-6 { gap: 4px !important; }
+            .gap-4 { gap: 3px !important; }
+            .gap-3 { gap: 3px !important; }
+            .p-6 { padding: 6px !important; }
+            .p-5 { padding: 6px !important; }
+            .p-4 { padding: 5px !important; }
+            .p-3 { padding: 4px !important; }
+            .text-3xl { font-size: 16px !important; }
+            .text-2xl { font-size: 14px !important; }
+            .text-lg { font-size: 10px !important; }
+            .text-sm { font-size: 8px !important; }
+            .text-xs { font-size: 7px !important; }
+            .space-y-4 > :not(:first-child) { margin-top: 4px !important; }
+            .space-y-3 > :not(:first-child) { margin-top: 3px !important; }
+            .space-y-2 > :not(:first-child) { margin-top: 2px !important; }
+            .space-y-1 > :not(:first-child) { margin-top: 1px !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen text-gray-100 p-4 md:p-6 lg:p-8">
+
+    <!-- Upload -->
+    <div class="max-w-[1600px] mx-auto mb-6 no-print" id="uploadSection">
+        <div class="upload-zone p-8 text-center" id="dropZone">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden">
+            <div class="flex flex-col items-center gap-3">
+                <svg class="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                <div>
+                    <p class="text-lg font-semibold text-white">Загрузите файл выгрузки ЕДС</p>
+                    <p class="text-sm text-gray-400 mt-1">Перетащите .xlsx, .xls или .csv сюда, либо <span class="text-indigo-400 underline">выберите файл</span></p>
+                </div>
+                <div class="flex gap-2 mt-2">
+                    <span class="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs">.xlsx</span>
+                    <span class="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs">.xls</span>
+                    <span class="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs">.csv</span>
+                </div>
+            </div>
+        </div>
+        <div id="fileInfo" class="hidden mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm flex items-center justify-between">
+            <span id="fileInfoText">✓ Файл загружен</span>
+            <button onclick="resetFile()" class="text-xs text-gray-400 hover:text-white">✕ Сбросить</button>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="max-w-[1600px] mx-auto mb-6 animate-in">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                    ЕДС Заявки — Аналитика
+                </h1>
+                <p class="text-gray-400 mt-2 text-sm md:text-base wrap-text" id="headerPeriod">Период: загрузите файл для анализа</p>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap no-print">
+                <span class="px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-medium" id="headerDate">Обновлено: —</span>
+                <span class="px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium" id="headerCount">0 заявок</span>
+                <button onclick="window.print()" class="px-4 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-200 text-xs font-medium hover:bg-indigo-500/30 transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                    Печать A3
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPI -->
+    <div class="max-w-[1600px] mx-auto grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6 print-grid-7">
+        <div class="stat-card animate-in delay-1">
+            <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Всего заявок</div>
+            <div class="text-3xl font-bold text-white glow-blue" id="kpiTotal">0</div>
+            <div class="text-xs text-gray-500 mt-1" id="kpiTotalSub">за период</div>
+        </div>
+        <div class="stat-card animate-in delay-1">
+            <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Выполнено</div>
+            <div class="text-3xl font-bold text-emerald-400 glow-green" id="kpiDone">0</div>
+            <div class="text-xs text-emerald-500/70 mt-1" id="kpiDonePct">0%</div>
+        </div>
+        <div class="stat-card animate-in delay-2">
+            <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">В работе</div>
+            <div class="text-3xl font-bold text-amber-400 glow-amber" id="kpiInProgress">0</div>
+            <div class="text-xs text-amber-500/70 mt-1" id="kpiInProgressPct">0%</div>
+        </div>
+        <div class="stat-card animate-in delay-2">
+            <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Аварийные</div>
+            <div class="text-3xl font-bold text-red-400 glow-red" id="kpiEmergency">0</div>
+            <div class="text-xs text-red-500/70 mt-1" id="kpiEmergencyPct">0%</div>
+        </div>
+        <div class="stat-card animate-in delay-3">
+            <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Просрочено</div>
+            <div class="text-3xl font-bold text-orange-400" id="kpiOverdue">0</div>
+            <div class="text-xs text-gray-500 mt-1" id="kpiOverdueSub">просрочек</div>
+        </div>
+        <div class="stat-card animate-in delay-3">
+            <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Ср. дней в работе</div>
+            <div class="text-3xl font-bold text-purple-400" id="kpiAvgDays">0</div>
+            <div class="text-xs text-gray-500 mt-1" id="kpiAvgDaysSub">среднее</div>
+        </div>
+        <div class="stat-card-repeat animate-in delay-4">
+            <div class="text-pink-300/80 text-xs uppercase tracking-wider mb-1">🔁 Повторы</div>
+            <div class="text-3xl font-bold text-pink-300 glow-pink" id="kpiRepeats">0</div>
+            <div class="text-xs text-pink-400/70 mt-1" id="kpiRepeatsSub">доля повторных</div>
+        </div>
+    </div>
+
+    <!-- Row 1: Date + Status -->
+    <div class="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 print-grid-2">
+        <div class="card p-5 animate-in delay-2">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Поступление заявок по датам</h3>
+            <p class="text-gray-400 text-xs mb-3">Динамика обращений</p>
+            <div class="relative chart-container" style="height:260px;">
+                <canvas id="chartByDate"></canvas>
+            </div>
+        </div>
+        <div class="card p-5 animate-in delay-2">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Распределение по статусам</h3>
+            <p class="text-gray-400 text-xs mb-3">Соотношение выполненных и находящихся в работе</p>
+            <div class="flex flex-col md:flex-row items-center justify-center chart-container" style="height:260px; gap:1rem;">
+                <div class="relative" style="width:190px; height:190px;">
+                    <canvas id="chartStatus"></canvas>
+                </div>
+                <div class="space-y-3" id="statusLegend">
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500"></span><span class="text-sm text-gray-300">Выполнено — <span id="legDone">0</span></span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-500"></span><span class="text-sm text-gray-300">В работе — <span id="legInProgress">0</span></span></div>
+                    <hr class="border-gray-700">
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span><span class="text-sm text-gray-300">Аварийные — <span id="legEmergency">0</span></span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-500"></span><span class="text-sm text-gray-300">Не аварийные — <span id="legNotEmergency">0</span></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2: Subcategories + Days -->
+    <div class="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 print-grid-2">
+        <div class="card p-5 animate-in delay-3">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Топ-10 подкатегорий</h3>
+            <p class="text-gray-400 text-xs mb-3">Наиболее частые типы обращений</p>
+            <div class="relative chart-container-lg" style="height:360px;">
+                <canvas id="chartSubcategories"></canvas>
+            </div>
+        </div>
+        <div class="card p-5 animate-in delay-3">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Дни в работе по статусам</h3>
+            <p class="text-gray-400 text-xs mb-3">Среднее, максимальное и минимальное количество дней</p>
+            <div class="relative chart-container-lg" style="height:360px;">
+                <canvas id="chartDaysWork"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 3: Lists -->
+    <div class="max-w-[1600px] mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 print-grid-3">
+        <div class="card p-5 animate-in delay-3">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Топ-10 фактов</h3>
+            <p class="text-gray-400 text-xs mb-3">Что требуется выполнить</p>
+            <div class="space-y-0 no-scroll" id="listFacts"></div>
+        </div>
+        <div class="card p-5 animate-in delay-4">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Топ-10 адресов</h3>
+            <p class="text-gray-400 text-xs mb-3">Наиболее проблемные адреса</p>
+            <div class="space-y-0 no-scroll" id="listAddresses"></div>
+        </div>
+        <div class="card p-5 animate-in delay-4">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Топ-10 заявителей</h3>
+            <p class="text-gray-400 text-xs mb-3">Наиболее активные по электронной почте</p>
+            <div class="space-y-0 no-scroll" id="listEmails"></div>
+        </div>
+    </div>
+
+    <!-- Row 4: Confirmation + Days distribution -->
+    <div class="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 print-grid-2">
+        <div class="card p-5 animate-in delay-4">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Подтверждение заявителем</h3>
+            <p class="text-gray-400 text-xs mb-3">Статус подтверждения выполненных работ</p>
+            <div class="flex items-center gap-4">
+                <div class="relative" style="width:180px; height:180px; flex-shrink:0;">
+                    <canvas id="chartConfirmation"></canvas>
+                </div>
+                <div class="grid grid-cols-1 gap-2 flex-1" id="confirmStats"></div>
+            </div>
+        </div>
+        <div class="card p-5 animate-in delay-4">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Распределение по дням в работе</h3>
+            <p class="text-gray-400 text-xs mb-3">Количество заявок в каждом диапазоне</p>
+            <div class="relative chart-container" style="height:220px;">
+                <canvas id="chartDaysDistribution"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 5: Repeats Accordion + Topics -->
+    <div class="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 print-grid-2">
+        <div class="card p-5 animate-in delay-3" style="border-color: rgba(236, 72, 153, 0.25);">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-xl">🔁</span>
+                <h3 class="text-lg font-semibold text-white wrap-text">Повторы по адресам и фактам</h3>
+            </div>
+            <p class="text-gray-400 text-xs mb-3">Раскройте адрес для просмотра фактов повторных обращений</p>
+            <div class="no-scroll" id="repeatAccordion" style="max-height: 500px; overflow-y: auto;"></div>
+        </div>
+        <div class="card p-5 animate-in delay-3">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Волнующие темы жителей</h3>
+            <p class="text-gray-400 text-xs mb-3">Ключевые проблемы, выявленные из текста обращений</p>
+            <div class="space-y-3" id="topicsContainer"></div>
+        </div>
+    </div>
+
+    <!-- Row 6: Emergency + Sources + Categories -->
+    <div class="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6 print-grid-3">
+        <div class="card p-5 animate-in delay-3">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Аварийные заявки</h3>
+            <p class="text-gray-400 text-xs mb-3">Детализация аварийных обращений</p>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="p-3 rounded-xl bg-red-500/5 border border-red-500/20 text-center topic-block">
+                    <div class="text-2xl font-bold text-red-400" id="emTotal">0</div>
+                    <div class="text-xs text-gray-400 mt-1">Аварийных</div>
+                    <div class="text-xs text-red-400/70" id="emTotalPct">0%</div>
+                </div>
+                <div class="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center topic-block">
+                    <div class="text-2xl font-bold text-emerald-400" id="emDone">0</div>
+                    <div class="text-xs text-gray-400 mt-1">Выполнено</div>
+                    <div class="text-xs text-emerald-400/70" id="emDonePct">0%</div>
+                </div>
+            </div>
+            <h4 class="text-sm font-semibold text-gray-300 mb-2 wrap-text">Категории аварийных:</h4>
+            <div class="space-y-1" id="emCategories"></div>
+        </div>
+
+        <div class="card p-5 animate-in delay-4">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Источники поступления</h3>
+            <p class="text-gray-400 text-xs mb-3">Каналы обращений жителей</p>
+            <div class="relative" style="height:220px;">
+                <canvas id="chartSources"></canvas>
+            </div>
+        </div>
+
+        <div class="card p-5 animate-in delay-3">
+            <h3 class="text-lg font-semibold text-white mb-1 wrap-text">Категории заявок</h3>
+            <p class="text-gray-400 text-xs mb-3">Распределение по основным категориям</p>
+            <div class="relative chart-container-lg" style="height:240px;">
+                <canvas id="chartCategories"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-[1600px] mx-auto text-center text-gray-500 text-xs pb-4">
+        <p id="footerText" class="wrap-text">Аналитический дашборд ЕДС Заявки | МБУ «КГС» | Городской округ Красногорск</p>
+    </div>
+
+<script>
+Chart.register(ChartDataLabels);
+const charts = {};
+let currentData = [];
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = 'rgba(99, 102, 241, 0.1)';
+Chart.defaults.font.family = 'Inter';
+
+const doughnutDataLabels = {
+    display: true, color: 'rgba(255,255,255,0.95)',
+    font: { size: 11, weight: '700' }, anchor: 'center', align: 'center',
+    formatter: (v) => v === 0 ? '' : v
+};
+
+// Глобальная функция сокращения адреса
+const shortAddr = a => a.replace(/^Красногорск\s*г,?\s*/i,'').replace(/^Московская область,?\s*/i,'');
+
+// Upload
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx','xls','csv'].includes(ext)) { alert('Поддерживаются только .xlsx, .xls, .csv'); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+            const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+            currentData = normalizeData(json);
+            document.getElementById('fileInfo').classList.remove('hidden');
+            document.getElementById('fileInfoText').textContent = `✓ ${file.name} — ${currentData.length} записей`;
+            analyzeData(currentData);
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+}
+function resetFile() {
+    currentData = []; fileInput.value = '';
+    document.getElementById('fileInfo').classList.add('hidden');
+    document.getElementById('headerPeriod').textContent = 'Период: загрузите файл для анализа';
+    document.getElementById('headerDate').textContent = 'Обновлено: —';
+    document.getElementById('headerCount').textContent = '0 заявок';
+}
+
+function normalizeData(json) {
+    return json.map(row => {
+        const find = (keys) => {
+            for (const k of Object.keys(row)) {
+                const kl = k.toLowerCase().trim();
+                for (const key of keys) { if (kl === key.toLowerCase()) return row[k]; }
+            }
+            return '';
+        };
+        let date = find(['Дата создания']);
+        if (date instanceof Date) date = date.toISOString().split('T')[0];
+        else if (typeof date === 'number') { const d = XLSX.SSF.parse_date_code(date); if (d) date = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`; }
+        else date = String(date).split(' ')[0];
+        return {
+            id: find(['id заявки','id']), category: String(find(['Категория'])||'').trim(),
+            subcategory: String(find(['Подкатегория'])||'').trim(), date,
+            status: String(find(['Статус'])||'').trim(),
+            days: Number(find(['Дней в работе']))||0,
+            confirmed: String(find(['Подтверждено заявителем'])||'').trim(),
+            overdue: String(find(['Просрочено'])||'').trim(),
+            emergency: String(find(['Аварийная'])||'').trim(),
+            address: String(find(['Адрес'])||'').trim(),
+            source: String(find(['Источник'])||'').trim(),
+            email: String(find(['Почта','email'])||'').trim(),
+            fact: String(find(['Факт'])||'').trim(),
+            text: String(find(['Текст обращения'])||'').trim(),
+            repeats: Number(find(['Количество повторов']))||0
+        };
+    }).filter(r => r.date || r.id);
+}
+
+function analyzeData(data) {
+    if (!data.length) return;
+    const dates = data.map(r => r.date).filter(d => d).sort();
+    const periodStr = formatDate(dates[0]) + ' – ' + formatDate(dates[dates.length-1]);
+    document.getElementById('headerPeriod').textContent = `Период: ${periodStr}`;
+    document.getElementById('headerDate').textContent = `Обновлено: ${formatDate(new Date().toISOString().split('T')[0])}`;
+    document.getElementById('headerCount').textContent = `${data.length} заявок`;
+    document.getElementById('footerText').textContent = `Аналитический дашборд ЕДС Заявки | ${periodStr} | ${data.length} заявок`;
+
+    const total = data.length;
+    const done = data.filter(r => /выполн/i.test(r.status)).length;
+    const inProgress = data.filter(r => /работ/i.test(r.status) && !/выполн/i.test(r.status)).length;
+    const emergency = data.filter(r => /да/i.test(r.emergency)).length;
+    const overdue = data.filter(r => /да/i.test(r.overdue)).length;
+    const avgDays = (data.reduce((s,r) => s+r.days, 0)/total).toFixed(1);
+    const totalRepeats = data.reduce((s,r) => s+(r.repeats||0), 0);
+    const rowsWithRepeats = data.filter(r => (r.repeats||0) > 0).length;
+
+    document.getElementById('kpiTotal').textContent = total;
+    document.getElementById('kpiTotalSub').textContent = `за ${dates.length} дней`;
+    document.getElementById('kpiDone').textContent = done;
+    document.getElementById('kpiDonePct').textContent = ((done/total)*100).toFixed(1)+'%';
+    document.getElementById('kpiInProgress').textContent = inProgress;
+    document.getElementById('kpiInProgressPct').textContent = ((inProgress/total)*100).toFixed(1)+'%';
+    document.getElementById('kpiEmergency').textContent = emergency;
+    document.getElementById('kpiEmergencyPct').textContent = ((emergency/total)*100).toFixed(1)+'%';
+    document.getElementById('kpiOverdue').textContent = overdue;
+    document.getElementById('kpiOverdueSub').textContent = overdue===0?'нет просрочек':'просрочено';
+    document.getElementById('kpiAvgDays').textContent = avgDays;
+    document.getElementById('kpiRepeats').textContent = totalRepeats;
+    document.getElementById('kpiRepeatsSub').textContent = totalRepeats>0 ? `${rowsWithRepeats} заявок (${((rowsWithRepeats/total)*100).toFixed(1)}%)` : 'нет повторов';
+    document.getElementById('legDone').textContent = done;
+    document.getElementById('legInProgress').textContent = inProgress;
+    document.getElementById('legEmergency').textContent = emergency;
+    document.getElementById('legNotEmergency').textContent = total - emergency;
+
+    // Date chart
+    const byDate = {}, emByDate = {};
+    data.forEach(r => { if(!r.date) return; byDate[r.date]=(byDate[r.date]||0)+1; if(/да/i.test(r.emergency)) emByDate[r.date]=(emByDate[r.date]||0)+1; });
+    const sortedDates = Object.keys(byDate).sort();
+    renderChart('chartByDate', { type:'bar', data:{ labels:sortedDates.map(d=>formatDateShort(d)), datasets:[
+        { label:'Всего', data:sortedDates.map(d=>byDate[d]), backgroundColor:sortedDates.map(d=>{ const v=byDate[d],mx=Math.max(...Object.values(byDate)); return v===mx?'rgba(239,68,68,0.7)':v>mx*0.7?'rgba(245,158,11,0.7)':'rgba(99,102,241,0.7)'; }), borderColor:sortedDates.map(d=>{ const v=byDate[d],mx=Math.max(...Object.values(byDate)); return v===mx?'#ef4444':v>mx*0.7?'#f59e0b':'#6366f1'; }), borderWidth:1, borderRadius:6 },
+        { label:'Аварийные', data:sortedDates.map(d=>emByDate[d]||0), backgroundColor:'rgba(239,68,68,0.5)', borderColor:'#ef4444', borderWidth:1, borderRadius:6 }
+    ]}}, { plugins:{ legend:{display:true,position:'top',labels:{usePointStyle:true,pointStyle:'circle',padding:15,font:{size:11}}}, datalabels:{display:true,color:'rgba(255,255,255,0.85)',font:{size:10,weight:'600'},anchor:'end',align:'top',offset:2,formatter:v=>v>0?v:''} }, scales:{y:{beginAtZero:true,grid:{color:'rgba(99,102,241,0.06)'}},x:{grid:{display:false}}} });
+
+    // Status
+    renderChart('chartStatus', { type:'doughnut', data:{ labels:['Выполнено','В работе'], datasets:[{data:[done,inProgress],backgroundColor:['rgba(34,197,94,0.8)','rgba(245,158,11,0.8)'],borderColor:['#22c55e','#f59e0b'],borderWidth:2,cutout:'65%'}] }}, {plugins:{legend:{display:false},datalabels:doughnutDataLabels}});
+
+    // Subcategories
+    const subcats = topN(data.map(r=>r.subcategory).filter(x=>x),10);
+    renderChart('chartSubcategories', { type:'bar', data:{ labels:subcats.map(s=>s.name), datasets:[{data:subcats.map(s=>s.count),backgroundColor:generateColors(subcats.length,0.7),borderColor:generateColors(subcats.length,1),borderWidth:1,borderRadius:4}] }}, { indexAxis:'y', plugins:{legend:{display:false},datalabels:{display:true,color:'rgba(255,255,255,0.9)',font:{size:10,weight:'700'},anchor:'end',align:'end',offset:4,formatter:v=>v}}, scales:{x:{beginAtZero:true,grid:{color:'rgba(99,102,241,0.06)'},ticks:{display:false}},y:{grid:{display:false},ticks:{font:{size:10},autoSkip:false,callback:function(v){return wrapLabel(this.getLabelForValue(v),45);}},afterFit:a=>{a.width=220;}}} });
+
+    // Days
+    const doneRows = data.filter(r=>/выполн/i.test(r.status));
+    const ipRows = data.filter(r=>/работ/i.test(r.status)&&!/выполн/i.test(r.status));
+    const avg = arr=>arr.length?(arr.reduce((s,r)=>s+r.days,0)/arr.length).toFixed(1):0;
+    const maxD = arr=>arr.length?Math.max(...arr.map(r=>r.days)):0;
+    const minD = arr=>arr.length?Math.min(...arr.map(r=>r.days)):0;
+    renderChart('chartDaysWork', { type:'bar', data:{ labels:['Выполнено','В работе'], datasets:[
+        {label:'Среднее',data:[avg(doneRows),avg(ipRows)],backgroundColor:'rgba(34,197,94,0.6)',borderColor:'#22c55e',borderWidth:1,borderRadius:4},
+        {label:'Максимум',data:[maxD(doneRows),maxD(ipRows)],backgroundColor:'rgba(245,158,11,0.6)',borderColor:'#f59e0b',borderWidth:1,borderRadius:4},
+        {label:'Минимум',data:[minD(doneRows),minD(ipRows)],backgroundColor:'rgba(99,102,241,0.6)',borderColor:'#6366f1',borderWidth:1,borderRadius:4}
+    ]}}, {plugins:{legend:{display:true,position:'top',labels:{usePointStyle:true,pointStyle:'circle',padding:15,font:{size:11}}},datalabels:{display:true,color:'rgba(255,255,255,0.9)',font:{size:10,weight:'700'},anchor:'end',align:'top',offset:2,formatter:v=>v}},scales:{y:{beginAtZero:true,grid:{color:'rgba(99,102,241,0.06)'}},x:{grid:{display:false}}}});
+
+    // Lists
+    renderList('listFacts', topN(data.map(r=>r.fact).filter(x=>x),10), 'indigo');
+    // Адреса — с сокращением
+    renderAddressList('listAddresses', topN(data.map(r=>r.address).filter(x=>x),10));
+    renderList('listEmails', topN(data.map(r=>r.email).filter(x=>x&&x.trim()),10), 'purple');
+
+    // Confirmation
+    const confirmed = data.filter(r=>/подтвержд/i.test(r.confirmed)).length;
+    const rejected = data.filter(r=>/отклонен/i.test(r.confirmed)).length;
+    const notSpec = total-confirmed-rejected;
+    renderChart('chartConfirmation', { type:'doughnut', data:{ labels:['Не указано','Подтверждено','Отклонено'], datasets:[{data:[notSpec,confirmed,rejected],backgroundColor:['rgba(100,116,139,0.6)','rgba(34,197,94,0.7)','rgba(239,68,68,0.7)'],borderColor:['#64748b','#22c55e','#ef4444'],borderWidth:2,cutout:'60%'}] }}, {plugins:{legend:{display:false},datalabels:doughnutDataLabels}});
+    document.getElementById('confirmStats').innerHTML = `
+        <div class="p-2 rounded-lg bg-gray-800/50 text-center"><div class="text-lg font-bold text-gray-300">${notSpec}</div><div class="text-xs text-gray-500">Не указано</div></div>
+        <div class="p-2 rounded-lg bg-emerald-500/10 text-center"><div class="text-lg font-bold text-emerald-400">${confirmed}</div><div class="text-xs text-gray-500">Подтверждено</div></div>
+        <div class="p-2 rounded-lg bg-red-500/10 text-center"><div class="text-lg font-bold text-red-400">${rejected}</div><div class="text-xs text-gray-500">Отклонено</div></div>
+    `;
+
+    // Days distribution
+    const daysDist = {};
+    data.forEach(r=>{daysDist[r.days]=(daysDist[r.days]||0)+1;});
+    const daysKeys = Object.keys(daysDist).map(Number).sort((a,b)=>a-b);
+    renderChart('chartDaysDistribution', { type:'bar', data:{ labels:daysKeys.map(d=>d+' '+pluralDays(d)), datasets:[{data:daysKeys.map(d=>daysDist[d]),backgroundColor:daysKeys.map(d=>d<=1?'rgba(34,197,94,0.7)':d<=3?'rgba(245,158,11,0.6)':d<=5?'rgba(245,158,11,0.8)':'rgba(239,68,68,0.7)'),borderColor:daysKeys.map(d=>d<=1?'#22c55e':d<=3?'#f59e0b':d<=5?'#f59e0b':'#ef4444'),borderWidth:1,borderRadius:4}] }}, {plugins:{legend:{display:false},datalabels:{display:true,color:'rgba(255,255,255,0.9)',font:{size:10,weight:'700'},anchor:'end',align:'top',offset:2,formatter:v=>v}},scales:{y:{beginAtZero:true,grid:{color:'rgba(99,102,241,0.06)'}},x:{grid:{display:false},ticks:{font:{size:10}}}}});
+
+    // Repeats accordion
+    renderRepeatAccordion(data);
+
+    // Topics
+    renderTopics(data);
+
+    // Emergency compact
+    document.getElementById('emTotal').textContent = emergency;
+    document.getElementById('emTotalPct').textContent = ((emergency/total)*100).toFixed(1)+'% от общего';
+    const emDone = data.filter(r=>/да/i.test(r.emergency)&&/выполн/i.test(r.status)).length;
+    document.getElementById('emDone').textContent = emDone;
+    document.getElementById('emDonePct').textContent = emergency?((emDone/emergency)*100).toFixed(1)+'% от аварийных':'0%';
+    const emCats = topN(data.filter(r=>/да/i.test(r.emergency)).map(r=>r.subcategory).filter(x=>x),5);
+    document.getElementById('emCategories').innerHTML = emCats.map(c=>`
+        <div class="flex items-center justify-between text-sm">
+            <span class="text-gray-400 wrap-text flex-1 mr-2">${escapeHtml(c.name)}</span>
+            <span class="text-red-400 font-bold whitespace-nowrap">${c.count}</span>
+        </div>
+    `).join('');
+
+    // Sources
+    const sources = topN(data.map(r=>r.source).filter(x=>x),10);
+    renderChart('chartSources', { type:'doughnut', data:{ labels:sources.map(s=>s.name), datasets:[{data:sources.map(s=>s.count),backgroundColor:generateColors(sources.length,0.8),borderColor:generateColors(sources.length,1),borderWidth:2,cutout:'50%'}] }}, {plugins:{legend:{position:'bottom',labels:{usePointStyle:true,pointStyle:'circle',padding:10,font:{size:10}}},datalabels:doughnutDataLabels}});
+
+    // Categories
+    const cats = topN(data.map(r=>r.category).filter(x=>x),10);
+    renderChart('chartCategories', { type:'bar', data:{ labels:cats.map(c=>c.name), datasets:[{data:cats.map(c=>c.count),backgroundColor:generateColors(cats.length,0.7),borderColor:generateColors(cats.length,1),borderWidth:1,borderRadius:4}] }}, {indexAxis:'y',plugins:{legend:{display:false},datalabels:{display:true,color:'rgba(255,255,255,0.9)',font:{size:10,weight:'700'},anchor:'end',align:'end',offset:4,formatter:v=>v}},scales:{x:{beginAtZero:true,grid:{color:'rgba(99,102,241,0.06)'},ticks:{display:false}},y:{grid:{display:false},ticks:{font:{size:10},autoSkip:false,callback:function(v){return wrapLabel(this.getLabelForValue(v),40);}},afterFit:a=>{a.width=200;}}}});
+}
+
+// ============ TOPICS ============
+function renderTopics(data) {
+    const topics = [
+        {
+            title: 'Отопление и ГВС',
+            keywords: ['отоплен','теплоснабж','батаре','стояк холод','нет тепла','холодн','горяч','водоснабж','гвс','полотенц','кран гвс','горячей воды','холодной уже','тёплая'],
+            color: 'red',
+            svgIcon: `<svg class="topic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2c-2 4-6 6-6 11a6 6 0 0012 0c0-5-4-7-6-11z"/><path d="M12 22v-2"/></svg>`
+        },
+        {
+            title: 'Канализация и затопления подвалов',
+            keywords: ['канализац','засор','подтоплен','затопл','прорыв','зловон','воняет','бурлит','дерьм','гавно'],
+            color: 'orange',
+            svgIcon: `<svg class="topic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v6m0 0l-3-3m3 3l3-3"/><path d="M5 12h14"/><path d="M6 16c0 2 2 4 6 4s6-2 6-4"/></svg>`
+        },
+        {
+            title: 'Антисанитария и отсутствие уборки',
+            keywords: ['уборк','гряз','мусор','таракан','грызун','антисанитар','полчища'],
+            color: 'amber',
+            svgIcon: `<svg class="topic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/><circle cx="7" cy="6" r="1"/><circle cx="17" cy="12" r="1"/><circle cx="10" cy="18" r="1"/></svg>`
+        },
+        {
+            title: 'Фасады и конструктивные элементы',
+            keywords: ['фасад','отмостк','плесен','трещин','кровл','водосток','герметизац','межпанельн'],
+            color: 'blue',
+            svgIcon: `<svg class="topic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/></svg>`
+        },
+        {
+            title: 'Лифты и безопасность',
+            keywords: ['лифт','лифтов','лифтовой','доводчик','освещен','зеркал','скорую не вызов','скорую'],
+            color: 'purple',
+            svgIcon: `<svg class="topic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/><path d="M8 8l-2 2 2 2"/><path d="M16 12l2-2-2-2"/></svg>`
+        },
+        {
+            title: 'Перерасчёт и начисления ЖКУ',
+            keywords: ['перерасч','начисл','квитанц','норматив','оплат','завышени','незаконн'],
+            color: 'indigo',
+            svgIcon: `<svg class="topic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 12h.01M18 12h.01"/></svg>`
+        }
+    ];
+
+    const topicCounts = topics.map(topic => {
+        const matched = data.filter(r => {
+            const text = (r.text + ' ' + r.fact).toLowerCase();
+            return topic.keywords.some(k => text.includes(k.toLowerCase()));
+        });
+        return { ...topic, matched };
+    });
+
+    topicCounts.sort((a, b) => b.matched.length - a.matched.length);
+
+    const container = document.getElementById('topicsContainer');
+    container.innerHTML = topicCounts.map(topic => {
+        if (!topic.matched.length) return '';
+        const sampleTexts = topic.matched.slice(0,2).map(r=>r.text.substring(0,120)).join(' ... ');
+        return `
+            <div class="p-3 rounded-xl bg-${topic.color}-500/5 border border-${topic.color}-500/20 topic-block">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                    <span class="text-${topic.color}-400">${topic.svgIcon}</span>
+                    <span class="text-sm font-semibold text-${topic.color}-300">${topic.title}</span>
+                    <span class="ml-auto text-xs px-2 py-0.5 rounded-full bg-${topic.color}-500/20 text-${topic.color}-300">${topic.matched.length} обращ.</span>
+                </div>
+                <p class="text-xs text-gray-400 wrap-text">${escapeHtml(sampleTexts)}...</p>
+            </div>
+        `;
+    }).join('');
+}
+
+// ============ REPEATS ACCORDION ============
+function renderRepeatAccordion(data) {
+    const container = document.getElementById('repeatAccordion');
+    const addrMap = {};
+    data.forEach(r => {
+        const rep = r.repeats||0;
+        if (rep>0 && r.address) {
+            if (!addrMap[r.address]) addrMap[r.address] = {total:0,facts:{}};
+            addrMap[r.address].total += rep;
+            const fact = r.fact || '(без указания факта)';
+            addrMap[r.address].facts[fact] = (addrMap[r.address].facts[fact]||0) + rep;
+        }
+    });
+    const sorted = Object.entries(addrMap)
+        .map(([addr,info])=>({address:addr,total:info.total,facts:Object.entries(info.facts).map(([n,c])=>({name:n,count:c})).sort((a,b)=>b.count-a.count)}))
+        .sort((a,b)=>b.total-a.total).slice(0,15);
+
+    if (!sorted.length) { container.innerHTML = `<div class="text-center text-gray-500 text-sm py-8">Повторных обращений не обнаружено</div>`; return; }
+
+    const maxTotal = sorted[0].total;
+
+    container.innerHTML = sorted.map((item,idx) => {
+        const pct = (item.total/maxTotal)*100;
+        const color = idx<3?'pink':idx<6?'purple':'indigo';
+        const factsHtml = item.facts.map(f => {
+            const factPct = ((f.count/item.total)*100).toFixed(0);
+            return `<div class="fact-row"><span class="text-xs text-gray-300 wrap-text flex-1">${escapeHtml(f.name)}</span><div class="flex items-center gap-2 flex-shrink-0"><span class="text-xs text-pink-300/70 whitespace-nowrap">${factPct}%</span><span class="text-xs font-bold text-pink-300 bg-pink-500/15 px-2 py-0.5 rounded whitespace-nowrap">${f.count}</span></div></div>`;
+        }).join('');
+        return `<details class="repeat-accordion" ${idx===0?'open':''}><summary><span class="text-sm text-gray-200 wrap-text flex-1">${escapeHtml(shortAddr(item.address))}</span><span class="text-xs font-bold text-${color}-300 bg-${color}-500/15 px-2 py-0.5 rounded whitespace-nowrap flex-shrink-0">${item.total} ${pluralRepeats(item.total)}</span></summary><div class="accordion-body"><div class="progress-bar mb-2" style="max-width:60%;"><div class="progress-fill bg-${color}-500" style="width:${pct}%"></div></div>${factsHtml}</div></details>`;
+    }).join('');
+}
+
+// ============ HELPERS ============
+function topN(arr,n){const c={};arr.forEach(x=>{c[x]=(c[x]||0)+1;});return Object.entries(c).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count).slice(0,n);}
+
+function renderList(id,items,color){
+    document.getElementById(id).innerHTML = items.map(item=>`<div class="list-item flex justify-between items-start gap-2"><span class="text-sm text-gray-300 wrap-text flex-1">${escapeHtml(item.name)}</span><span class="text-xs font-bold text-${color}-400 bg-${color}-500/10 px-2 py-0.5 rounded whitespace-nowrap flex-shrink-0">${item.count}</span></div>`).join('');
+}
+function renderAddressList(id,items){
+    const max=items[0]?.count||1;
+    const colors=['red','orange','amber','blue','blue','blue','blue','blue','blue','blue'];
+    document.getElementById(id).innerHTML = items.map((item,i)=>{
+        const c=colors[i]||'blue',pct=(item.count/max)*100;
+        return `<div class="list-item"><div class="flex justify-between items-start gap-2 mb-1"><span class="text-sm text-gray-300 wrap-text flex-1">${escapeHtml(shortAddr(item.name))}</span><span class="text-xs font-bold text-${c}-400 bg-${c}-500/10 px-2 py-0.5 rounded whitespace-nowrap flex-shrink-0">${item.count}</span></div><div class="progress-bar"><div class="progress-fill bg-${c}-500" style="width:${pct}%"></div></div></div>`;
+    }).join('');
+}
+function renderChart(id,config,options={}){
+    if(charts[id])charts[id].destroy();
+    const ctx=document.getElementById(id);if(!ctx)return;
+    charts[id]=new Chart(ctx,{...config,options:{responsive:true,maintainAspectRatio:false,...options}});
+}
+function generateColors(n,alpha){
+    const p=[[99,102,241],[168,85,247],[239,68,68],[245,158,11],[6,182,212],[34,197,94],[236,72,153],[251,146,60],[56,189,248],[163,230,53],[232,121,249],[45,212,191]];
+    return Array.from({length:n},(_,i)=>{const c=p[i%p.length];return `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;});
+}
+function wrapLabel(text,maxLen){
+    if(text.length<=maxLen)return text;
+    const words=text.split(' '),lines=[];let cur='';
+    words.forEach(w=>{if((cur+' '+w).trim().length>maxLen){if(cur)lines.push(cur.trim());cur=w;}else cur=(cur+' '+w).trim();});
+    if(cur)lines.push(cur.trim());
+    return lines.slice(0,3);
+}
+function pluralDays(n){const a=Math.abs(n)%100,l=a%10;if(a>10&&a<20)return'дней';if(l===1)return'день';if(l>=2&&l<=4)return'дня';return'дней';}
+function pluralRepeats(n){const a=Math.abs(n)%100,l=a%10;if(a>10&&a<20)return'повторов';if(l===1)return'повтор';if(l>=2&&l<=4)return'повтора';return'повторов';}
+function formatDate(d){if(!d)return'—';const[y,m,day]=d.split('-');return `${day}.${m}.${y}`;}
+function formatDateShort(d){if(!d)return'—';const[y,m,day]=d.split('-');return `${day}.${m}`;}
+function escapeHtml(s){if(!s)return'';return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+window.addEventListener('beforeprint',()=>{document.querySelectorAll('details.repeat-accordion').forEach(d=>{d.setAttribute('open','');d.dataset.wasClosed='true';});});
+window.addEventListener('afterprint',()=>{document.querySelectorAll('details.repeat-accordion').forEach(d=>{if(d.dataset.wasClosed==='true'){d.removeAttribute('open');delete d.dataset.wasClosed;}});});
+
+document.getElementById('headerPeriod').textContent = 'Период: загрузите файл для анализа';
+</script>
+</body>
+</html>

@@ -515,6 +515,7 @@ function resetFile() {
     document.getElementById('headerPeriod').textContent = 'Период: загрузите файл для анализа';
     document.getElementById('headerDate').textContent = 'Обновлено: —';
     document.getElementById('headerCount').textContent = '0 заявок';
+    document.getElementById('kpiTotalSub').textContent = 'за период';
 }
 
 function normalizeData(json) {
@@ -551,6 +552,8 @@ function normalizeData(json) {
 function analyzeData(data) {
     if (!data.length) return;
     const dates = data.map(r => r.date).filter(d => d).sort();
+    // Уникальные даты для подсчёта количества дней в периоде
+    const uniqueDates = [...new Set(dates)];
     const periodStr = formatDate(dates[0]) + ' – ' + formatDate(dates[dates.length-1]);
     document.getElementById('headerPeriod').textContent = `Период: ${periodStr}`;
     document.getElementById('headerDate').textContent = `Обновлено: ${formatDate(new Date().toISOString().split('T')[0])}`;
@@ -567,7 +570,8 @@ function analyzeData(data) {
     const rowsWithRepeats = data.filter(r => (r.repeats||0) > 0).length;
 
     document.getElementById('kpiTotal').textContent = total;
-    document.getElementById('kpiTotalSub').textContent = `за ${dates.length} дней`;
+    // Количество дней берём из уникальных дат периода, а не из общего числа заявок
+    document.getElementById('kpiTotalSub').textContent = `за ${uniqueDates.length} ${pluralDays(uniqueDates.length)}`;
     document.getElementById('kpiDone').textContent = done;
     document.getElementById('kpiDonePct').textContent = ((done/total)*100).toFixed(1)+'%';
     document.getElementById('kpiInProgress').textContent = inProgress;
@@ -614,7 +618,6 @@ function analyzeData(data) {
 
     // Lists
     renderList('listFacts', topN(data.map(r=>r.fact).filter(x=>x),10), 'indigo');
-    // Адреса — с сокращением
     renderAddressList('listAddresses', topN(data.map(r=>r.address).filter(x=>x),10));
     renderList('listEmails', topN(data.map(r=>r.email).filter(x=>x&&x.trim()),10), 'purple');
 
